@@ -16,7 +16,7 @@
 ]]
 
 
-if _G.EmotesGUIRunning then
+if _G.EmotesGUIRunning and _G.EmotesGUILoaded then
     getgenv().Notify({
         Title = '7yd7 | Emote',
         Content = '⚠️ It works It actually works',
@@ -32,7 +32,7 @@ _G.EmotesGUIRunning = true
 -- All remote Lua libraries + emote/animation data are loaded from here,
 -- so the script NEVER fetches code from the original author's repos.
 local MIRROR_USER = "chongchhayhong-dotcom"
-local MIRROR_REPO = "emotes-mirror"
+local MIRROR_REPO = "emote-mirror"
 local MIRROR_BRANCH = "main"
 local MIRROR_BASE = ("https://raw.githubusercontent.com/%s/%s/refs/heads/%s/"):format(MIRROR_USER, MIRROR_REPO, MIRROR_BRANCH)
 local function MirrorPath(p) return MIRROR_BASE .. p end
@@ -8460,3 +8460,4 @@ if UserInputService.KeyboardEnabled then
         Duration = 10
     })
 end
+_G.EmotesGUILoaded = true
