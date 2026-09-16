@@ -995,8 +995,8 @@ function syncDiscordVisibility()
 end
 
 DiscordBtn.MouseButton1Click:Connect(function()
-    setclipboard("https://discord.gg/kRfzv2kV7X")
-    getgenv().Notify({Title = "Discord", Content = "The Discord invite has been copied", Duration = 3})
+    setclipboard("https://t.me/kimhengsorng")
+    getgenv().Notify({Title = "Telegram", Content = "Telegram link has been copied", Duration = 3})
 end)
 
 ToggleBtn.MouseButton1Click:Connect(function()
@@ -1109,7 +1109,7 @@ TogglesUI.NavVisible = SettingsLib.AddToggle(ButtonsTab, "Page Controls", "Show/
     SaveConfig()
 end)
 
-TogglesUI.DiscordVisible = SettingsLib.AddToggle(ButtonsTab, "Discord Button", "Show/Hide the discord link button", Config.DiscordVisible, function(v)
+TogglesUI.DiscordVisible = SettingsLib.AddToggle(ButtonsTab, "Telegram Button", "Show/Hide the telegram link button", Config.DiscordVisible, function(v)
     Config.DiscordVisible = v
     syncDiscordVisibility()
     SaveConfig()
@@ -1316,7 +1316,7 @@ end
 
 local ThemeTab = SettingsLib.CreateTab("Theme", 3)
 
-local DiscordPromo = SettingsLib.AddItem(ThemeTab, "WANT THEMES?", "Join our Discord for themes!")
+local DiscordPromo = SettingsLib.AddItem(ThemeTab, "WANT THEMES?", "Join my Telegram for themes!")
 DiscordPromo.LayoutOrder = -1
 
 local CopyBtn = SettingsLib:Create("TextButton", {
@@ -1331,8 +1331,8 @@ local CopyBtn = SettingsLib:Create("TextButton", {
 }, { SettingsLib:Create("UICorner", {CornerRadius = UDim.new(0, 6)}) })
 
 CopyBtn.MouseButton1Click:Connect(function()
-    setclipboard("https://discord.gg/kRfzv2kV7X")
-    getgenv().Notify({Title = "Discord", Content = "Link copied to clipboard!", Duration = 3})
+    setclipboard("https://t.me/kimhengsorng")
+    getgenv().Notify({Title = "Telegram", Content = "Link copied to clipboard!", Duration = 3})
 end)
 
 local ThemeConfigPath = "7yd7/EmoteThemes.json"
