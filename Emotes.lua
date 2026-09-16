@@ -34,7 +34,7 @@ _G.EmotesGUIRunning = true
 local MIRROR_USER = "chongchhayhong-dotcom"
 local MIRROR_REPO = "emotes-mirror"
 local MIRROR_BRANCH = "main"
-local MIRROR_BASE = ("https://raw.githubusercontent.com/%s/%s/refs/heads/%s/"):format(MIRROR_USER, MIRROR_REPO, MIRROR_BRANCH)
+local MIRROR_BASE = ("https://raw.githubusercontent.com/%s/%s/%s/"):format(MIRROR_USER, MIRROR_REPO, MIRROR_BRANCH)
 local function MirrorPath(p) return MIRROR_BASE .. p end
 -- ============================================================
 
@@ -55,13 +55,26 @@ local request = http_request or (syn and syn.request) or request
 -- executor's request/http_request/syn.request API. Returns body string
 -- or (nil, errorMessage). Works across PC and mobile executors.
 function HttpFetch(url)
+    local function isValidBody(b)
+        if type(b) ~= "string" or b == "" then return false end
+        -- Detect GitHub 404 pages / error responses
+        if b:find("404: Not Found") or b:find("<!DOCTYPE html>") or b:find("<html") then
+            return false
+        end
+        -- If body is just "404" or very short and contains 404, treat as failure
+        if #b < 100 and b:find("404") then
+            return false
+        end
+        return true
+    end
+
     local ok, body = pcall(function()
         if game and game.HttpGet then
             return game:HttpGet(url)
         end
         return nil
     end)
-    if ok and type(body) == "string" and body ~= "" then
+    if ok and isValidBody(body) then
         return body
     end
 
@@ -75,18 +88,18 @@ function HttpFetch(url)
             return reqFn({
                 Url = url,
                 Method = "GET",
-                Headers = { ["User-Agent"] = "Roblox/EmotesMirror" }
+                Headers = { ["User-Agent"] = "Roblox/EmotesMirror", ["Cache-Control"] = "no-cache" }
             })
         end)
         if ok2 and type(res) == "table" then
             local b = res.Body or res.body
-            if type(b) == "string" and b ~= "" then
+            if isValidBody(b) then
                 return b
             end
         end
     end
 
-    return nil, "all HTTP methods failed"
+    return nil, "all HTTP methods failed or returned 404"
 end
 
 -- Safe notify: calls getgenv().Notify if it exists, otherwise prints/warns.
@@ -136,7 +149,7 @@ if WHITELIST_ENABLED then
             warn("[Emotes] ❌ Access denied for: " .. tostring(localPlayer.Name) .. " | Whitelist: " .. table.concat(WHITELISTED_USERS, ", "))
             -- Kick non-whitelisted user with custom message
             pcall(function()
-                localPlayer:Kick("Vaii klanh 1 sin ban lg ban​ orr គ្នាលេងហី")
+                localPlayer:Kick("Vaii klanh 1 sin ban lg ban")
             end)
             task.wait(0.5)
             -- Fallback: if kick fails (some executors block it), just stop script
