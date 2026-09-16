@@ -16,8 +16,8 @@
 ]]
 
 
-if _G.EmotesGUIRunning and _G.EmotesGUILoaded then
-    getgenv().Notify({
+if _G.EmotesGUIRunning then
+    SafeNotify({
         Title = '7yd7 | Emote',
         Content = '⚠️ It works It actually works',
         Duration = 5
@@ -32,7 +32,7 @@ _G.EmotesGUIRunning = true
 -- All remote Lua libraries + emote/animation data are loaded from here,
 -- so the script NEVER fetches code from the original author's repos.
 local MIRROR_USER = "chongchhayhong-dotcom"
-local MIRROR_REPO = "emote-mirror"
+local MIRROR_REPO = "emotes-mirror"
 local MIRROR_BRANCH = "main"
 local MIRROR_BASE = ("https://raw.githubusercontent.com/%s/%s/refs/heads/%s/"):format(MIRROR_USER, MIRROR_REPO, MIRROR_BRANCH)
 local function MirrorPath(p) return MIRROR_BASE .. p end
@@ -50,6 +50,106 @@ local GuiService = game:GetService("GuiService")
 local ContentProvider = game:GetService("ContentProvider")
 local StarterGui = game:GetService("StarterGui")
 local request = http_request or (syn and syn.request) or request
+
+-- [MIRROR-FIX] Robust HTTP fetch: tries game:HttpGet first, then the
+-- executor's request/http_request/syn.request API. Returns body string
+-- or (nil, errorMessage). Works across PC and mobile executors.
+function HttpFetch(url)
+    local ok, body = pcall(function()
+        if game and game.HttpGet then
+            return game:HttpGet(url)
+        end
+        return nil
+    end)
+    if ok and type(body) == "string" and body ~= "" then
+        return body
+    end
+
+    local reqFn = (http_request ~= nil and http_request)
+        or (syn and syn.request)
+        or (http and http.request)
+        or (getgenv and (getgenv().request or getgenv().http_request))
+        or request
+    if reqFn then
+        local ok2, res = pcall(function()
+            return reqFn({
+                Url = url,
+                Method = "GET",
+                Headers = { ["User-Agent"] = "Roblox/EmotesMirror" }
+            })
+        end)
+        if ok2 and type(res) == "table" then
+            local b = res.Body or res.body
+            if type(b) == "string" and b ~= "" then
+                return b
+            end
+        end
+    end
+
+    return nil, "all HTTP methods failed"
+end
+
+-- Safe notify: calls getgenv().Notify if it exists, otherwise prints/warns.
+-- Never crashes when Notify has not loaded yet.
+function SafeNotify(data)
+    local n = (getgenv and getgenv().Notify)
+    if type(n) == "function" then
+        pcall(n, data)
+    else
+        warn("[7yd7] " .. tostring(data and (data.Title or "") ) .. " | " .. tostring(data and data.Content or ""))
+    end
+end
+
+-- ============================================================
+-- [WHITELIST] Only allowed users can use this script
+-- អ្នកអាចបន្ថែមឈ្មោះច្រើនបាន ឧ. {"XxLAGGERx_6", "Friend1", "Friend2"}
+-- ប្រសិនបើមិនចង់ប្រើ whitelist ទៀត ប្តូរ WHITELIST_ENABLED = false
+local WHITELIST_ENABLED = true
+local WHITELISTED_USERS = {
+    "XxLAGGERx_6",
+}
+
+if WHITELIST_ENABLED then
+    local success, localPlayer = pcall(function() return Players.LocalPlayer end)
+    if success and localPlayer and localPlayer.Name then
+        local isAllowed = false
+        local lowerName = string.lower(localPlayer.Name)
+        for _, allowedName in ipairs(WHITELISTED_USERS) do
+            if lowerName == string.lower(allowedName) then
+                isAllowed = true
+                break
+            end
+        end
+        if not isAllowed then
+            pcall(function()
+                StarterGui:SetCore("SendNotification", {
+                    Title = "Access Denied",
+                    Text = "You are not whitelisted! Contact XxLAGGERx_6",
+                    Duration = 7
+                })
+            end)
+            SafeNotify({
+                Title = "Access Denied",
+                Content = "❌ You are not whitelisted! (" .. tostring(localPlayer.Name) .. ")",
+                Duration = 7
+            })
+            warn("[Emotes] ❌ Access denied for: " .. tostring(localPlayer.Name) .. " | Whitelist: " .. table.concat(WHITELISTED_USERS, ", "))
+            -- Kick non-whitelisted user with custom message
+            pcall(function()
+                localPlayer:Kick("Vaii klanh 1 sin ban lg ban")
+            end)
+            task.wait(0.5)
+            -- Fallback: if kick fails (some executors block it), just stop script
+            _G.EmotesGUIRunning = nil
+            return
+        else
+            print("[Emotes] ✅ Whitelisted user: " .. tostring(localPlayer.Name))
+        end
+    end
+end
+-- ============================================================
+
+
 
 local State = {
     currentMode = "emote",
@@ -681,31 +781,35 @@ AnimationSystem.ResetRandomSlot = function(frontFrame)
 end
 
 function SafeLoad(url, name)
-    local success, content
+    local content, err
     for i = 1, 3 do
-        success, content = pcall(function() return game:HttpGet(url) end)
-        if success and content and content ~= "" then break end
+        content, err = HttpFetch(url)
+        if content and content ~= "" then break end
         task.wait(0.5)
     end
-    
-    if not success or not content or content == "" then
-        getgenv().Notify({
+
+    if not content or content == "" then
+        warn("7yd7 | SafeLoad: FAILED to download " .. tostring(name) .. " (" .. tostring(url) .. ") - " .. tostring(err))
+        SafeNotify({
             Title = '7yd7 | Error',
-            Content = 'Failed to download ' .. (name or "script") .. ' after 3 attempts.',
-            Duration = 5
+            Content = 'Failed to download ' .. (name or "script") .. '. Check your internet/VPN. ('..tostring(err)..')',
+            Duration = 8
         })
+        if name == "Notify System" then
+            _G.EmotesGUIRunning = nil  -- allow retrying after fixing network
+        end
         return function() end
     end
 
-    local func, err = loadstring(content)
+    local func, perr = loadstring(content)
     if not func then
-        warn("7yd7 | SafeLoad: Failed to parse " .. (name or "script") .. ": " .. tostring(err))
+        warn("7yd7 | SafeLoad: Failed to parse " .. tostring(name) .. ": " .. tostring(perr))
         return function() end
     end
 
     local ok, res = pcall(func)
     if not ok then
-        warn("7yd7 | SafeLoad: Error executing " .. (name or "script") .. ": " .. tostring(res))
+        warn("7yd7 | SafeLoad: Error executing " .. tostring(name) .. ": " .. tostring(res))
         return function() end
     end
     return res
@@ -759,7 +863,7 @@ function GetAsset(asset)
                 end)
             end
             
-            local success, content = pcall(function() return game:HttpGet(targetUrl) end)
+            local success, content = pcall(function() return HttpFetch(targetUrl) end)
             if success and content and content ~= "" then
                 local low = content:sub(1, 100):lower()
                 if low:find("<!doctype") or low:find("<html") or low:find("<head") then
@@ -917,7 +1021,11 @@ LoadConfig()
 local rawNotify = getgenv().Notify
 getgenv().Notify = function(data)
     if Config.NotifyEnabled then
-        rawNotify(data)
+        if type(rawNotify) == "function" then
+            pcall(rawNotify, data)
+        else
+            warn("[7yd7] Notify (UI not loaded): " .. tostring(data and data.Content or ""))
+        end
     end
 end
 
@@ -995,8 +1103,8 @@ function syncDiscordVisibility()
 end
 
 DiscordBtn.MouseButton1Click:Connect(function()
-    setclipboard("https://t.me/kimhengsorng")
-    getgenv().Notify({Title = "Telegram", Content = "Telegram link has been copied", Duration = 3})
+    setclipboard("https://discord.gg/kRfzv2kV7X")
+    getgenv().Notify({Title = "Discord", Content = "The Discord invite has been copied", Duration = 3})
 end)
 
 ToggleBtn.MouseButton1Click:Connect(function()
@@ -1109,7 +1217,7 @@ TogglesUI.NavVisible = SettingsLib.AddToggle(ButtonsTab, "Page Controls", "Show/
     SaveConfig()
 end)
 
-TogglesUI.DiscordVisible = SettingsLib.AddToggle(ButtonsTab, "Telegram Button", "Show/Hide the telegram link button", Config.DiscordVisible, function(v)
+TogglesUI.DiscordVisible = SettingsLib.AddToggle(ButtonsTab, "Discord Button", "Show/Hide the discord link button", Config.DiscordVisible, function(v)
     Config.DiscordVisible = v
     syncDiscordVisibility()
     SaveConfig()
@@ -1316,7 +1424,7 @@ end
 
 local ThemeTab = SettingsLib.CreateTab("Theme", 3)
 
-local DiscordPromo = SettingsLib.AddItem(ThemeTab, "WANT THEMES?", "Join my Telegram for themes!")
+local DiscordPromo = SettingsLib.AddItem(ThemeTab, "WANT THEMES?", "Join our Discord for themes!")
 DiscordPromo.LayoutOrder = -1
 
 local CopyBtn = SettingsLib:Create("TextButton", {
@@ -1331,8 +1439,8 @@ local CopyBtn = SettingsLib:Create("TextButton", {
 }, { SettingsLib:Create("UICorner", {CornerRadius = UDim.new(0, 6)}) })
 
 CopyBtn.MouseButton1Click:Connect(function()
-    setclipboard("https://t.me/kimhengsorng")
-    getgenv().Notify({Title = "Telegram", Content = "Link copied to clipboard!", Duration = 3})
+    setclipboard("https://discord.gg/kRfzv2kV7X")
+    getgenv().Notify({Title = "Discord", Content = "Link copied to clipboard!", Duration = 3})
 end)
 
 local ThemeConfigPath = "7yd7/EmoteThemes.json"
@@ -1748,10 +1856,10 @@ function ApplyWheelBackgroundImage(bgImg, wheel)
         bgImg.ImageRectOffset = Vector2.new(0, 0)
 
         task.spawn(function()
-            local okGif, gifBytes = pcall(function() return game:HttpGet(gifUrl) end)
+            local okGif, gifBytes = pcall(function() return HttpFetch(gifUrl) end)
             local gifInfo = okGif and gifBytes and AnimationSystem.ParseGifInfo(gifBytes) or nil
 
-            local okSheet, sheetBytes = pcall(function() return game:HttpGet(sheetUrl) end)
+            local okSheet, sheetBytes = pcall(function() return HttpFetch(sheetUrl) end)
             local sheetInfo = okSheet and sheetBytes and AnimationSystem.ParsePngInfo(sheetBytes) or nil
             local sheetAsset = GetAsset(sheetUrl)
 
@@ -5550,7 +5658,7 @@ function fetchAllEmotes()
 
     local function fetchFromUrl()
         local success, result = pcall(function()
-            local jsonContent = game:HttpGet(MirrorPath("EmoteSniper.json"))
+            local jsonContent = HttpFetch(MirrorPath("EmoteSniper.json"))
             if jsonContent and jsonContent ~= "" then
                 local data = HttpService:JSONDecode(jsonContent)
                 return data.data or {}
@@ -5669,7 +5777,7 @@ function fetchAllAnimations()
 
     task.spawn(function()
         local success, result = pcall(function()
-            local jsonContent = game:HttpGet(MirrorPath("AnimationSniper.json"))
+            local jsonContent = HttpFetch(MirrorPath("AnimationSniper.json"))
             if jsonContent and jsonContent ~= "" then
                 local data = HttpService:JSONDecode(jsonContent)
                 return data.data or {}
@@ -5680,7 +5788,7 @@ function fetchAllAnimations()
         local offsaleSuccess, offsaleResult
         if offsaleAnimationJson then
             offsaleSuccess, offsaleResult = pcall(function()
-                local jsonContent = game:HttpGet(MirrorPath("AnimationSniperoffsale.json"))
+                local jsonContent = HttpFetch(MirrorPath("AnimationSniperoffsale.json"))
                 if jsonContent and jsonContent ~= "" then
                     local data = HttpService:JSONDecode(jsonContent)
                     return data.data or {}
@@ -8460,4 +8568,3 @@ if UserInputService.KeyboardEnabled then
         Duration = 10
     })
 end
-_G.EmotesGUILoaded = true
