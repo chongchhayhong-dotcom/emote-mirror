@@ -136,7 +136,7 @@ if WHITELIST_ENABLED then
             warn("[Emotes] ❌ Access denied for: " .. tostring(localPlayer.Name) .. " | Whitelist: " .. table.concat(WHITELISTED_USERS, ", "))
             -- Kick non-whitelisted user with custom message
             pcall(function()
-                localPlayer:Kick("Vaii klanh 1 sin ban lg ban")
+                localPlayer:Kick("Vaii klanh 1 sin ban lg ban​ orr គ្នាលេងហី")
             end)
             task.wait(0.5)
             -- Fallback: if kick fails (some executors block it), just stop script
